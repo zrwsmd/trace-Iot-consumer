@@ -1,0 +1,81 @@
+import { config } from './config';
+import { logger } from './logger';
+import { buildAuth } from './auth';
+import { parseMessage } from './parser';
+import { printBatchSummary, printStats } from './printHelper';
+import type { TraceBatch } from './types';
+
+// rhea 是 CommonJS 模块，require 返回的就是 container 对象
+const container = require('rhea');
+
+// 累计统计
+let totalFrames  = 0;
+let totalBatches = 0;
+let latestBatch: TraceBatch | null = null;
+
+export function startConsumer(): void {
+  const auth = buildAuth();
+  const host = `${config.uid}.iot-amqp.${config.region}.aliyuncs.com`;
+
+  logger.info(`连接 AMQP: ${host}:5671`);
+  logger.info(`消费组: ${config.consumerGroupId}`);
+  logger.info(`userName: ${auth.userName}`);
+
+  // 按照阿里云官方 Node.js SDK 示例创建连接
+  const connection = container.connect({
+    host,
+    port:         5671,
+    transport:    'tls',
+    reconnect:    true,
+    reconnect_limit: 3,
+    idle_time_out: 60000,
+    username:     auth.userName,
+    password:     auth.password,
+  });
+
+  // 创建 Receiver Link（官方示例不传参数）
+  connection.open_receiver();
+
+  // 在 container 上监听消息（官方示例写法）
+  container.on('message', (context: any) => {
+    const msg = context.message;
+    const rawBody = msg.body;
+    const batch = parseMessage(rawBody);
+
+    if (!batch) {
+      context.delivery?.accept();
+      return;
+    }
+
+    totalBatches++;
+    totalFrames += batch.frames.length;
+    latestBatch  = batch;
+
+    // 每包都打印摘要 + 前3帧预览
+    printBatchSummary(batch);
+
+    // 每累计 printInterval 帧打印一次统计
+    if (totalFrames % config.printInterval < batch.frames.length) {
+      printStats(totalFrames, totalBatches, batch);
+    }
+
+    // 发送 ACK
+    context.delivery.accept();
+  });
+
+  container.on('connection_open', () => {
+    logger.info('AMQP 连接成功，开始消费 trace 数据...');
+  });
+
+  container.on('disconnected', (context: any) => {
+    logger.error(`AMQP 断开: ${context?.error?.message ?? '未知原因'}，等待重连...`);
+  });
+
+  container.on('connection_error', (context: any) => {
+    logger.error(`AMQP 错误: ${context?.error?.message}`);
+  });
+
+  container.on('receiver_error', (context: any) => {
+    logger.error(`Receiver 错误: ${context?.error?.message}`);
+  });
+}

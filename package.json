@@ -1,0 +1,21 @@
+{
+  "name": "trace-consumer",
+  "version": "1.0.0",
+  "description": "阿里云IoT平台 Trace数据 AMQP消费端（TypeScript）",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "ts-node src/index.ts",
+    "watch": "tsc --watch"
+  },
+  "dependencies": {
+    "rhea": "latest",
+    "dotenv": "^16.0.3"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0",
+    "ts-node": "^10.9.2",
+    "@types/node": "^20.0.0"
+  }
+}
