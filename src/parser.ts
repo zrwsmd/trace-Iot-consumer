@@ -31,6 +31,8 @@ export function parseMessage(rawMsg: unknown): TraceBatch | null {
       return null;
     }
 
+
+
     // 提取 payload（可能在 envelope.payload 或直接就是 envelope）
     let data: TracePayload;
     
@@ -51,6 +53,8 @@ export function parseMessage(rawMsg: unknown): TraceBatch | null {
       // 没有 payload 字段，整个 envelope 就是数据
       data = envelope as TracePayload;
     }
+
+      logger.debug(`收到消息: ${data}`);
 
     // 验证必需字段
     if (!data.frames || !Array.isArray(data.frames)) {
