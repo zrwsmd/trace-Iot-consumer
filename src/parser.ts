@@ -18,8 +18,23 @@ export function parseMessage(rawMsg: unknown): TraceBatch | null {
 
     // 处理不同类型的消息体
     if (typeof rawMsg === 'object' && rawMsg !== null && !Buffer.isBuffer(rawMsg)) {
-      // rhea 已经解析成对象，直接使用
-      envelope = rawMsg;
+      // rhea 已经解析成对象
+      const msgObj = rawMsg as any;
+      
+      // 检查是否是 AMQP 消息体结构（有 typecode, content, multiple 字段）
+      if (msgObj.content !== undefined) {
+        // AMQP 消息体，实际数据在 content 字段
+        if (Buffer.isBuffer(msgObj.content)) {
+          envelope = JSON.parse(msgObj.content.toString('utf8'));
+        } else if (typeof msgObj.content === 'string') {
+          envelope = JSON.parse(msgObj.content);
+        } else {
+          envelope = msgObj.content;
+        }
+      } else {
+        // 普通对象，直接使用
+        envelope = msgObj;
+      }
     } else if (Buffer.isBuffer(rawMsg)) {
       // Buffer 类型，转成字符串再解析
       envelope = JSON.parse(rawMsg.toString('utf8'));
@@ -30,8 +45,6 @@ export function parseMessage(rawMsg: unknown): TraceBatch | null {
       logger.error(`未知的消息类型: ${typeof rawMsg}`);
       return null;
     }
-
-
 
     // 提取 payload（可能在 envelope.payload 或直接就是 envelope）
     let data: TracePayload;
@@ -54,7 +67,7 @@ export function parseMessage(rawMsg: unknown): TraceBatch | null {
       data = envelope as TracePayload;
     }
 
-      logger.debug(`收到消息: ${data}`);
+    logger.debug(`解析后的数据字段: ${Object.keys(data).join(', ')}`);
 
     // 验证必需字段
     if (!data.frames || !Array.isArray(data.frames)) {
