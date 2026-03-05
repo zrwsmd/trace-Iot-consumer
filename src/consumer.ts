@@ -34,7 +34,20 @@ export function startConsumer(): void {
   });
 
   // 创建 Receiver Link（官方示例不传参数）
-  connection.open_receiver();
+  connection.open_receiver({
+    source: {
+      address:  config.consumerGroupId,
+      // 从最早位点开始消费，消费组内所有未过期消息都会重新推过来
+      // 如果想从最新位点开始（只消费新数据），把 value 改成 'latest'
+      filter: {
+        'apache.org:selector-filter:string': {
+          descriptor: 'apache.org:selector-filter:string',
+          value: 'earliest',
+        },
+      },
+    },
+    credit_window: 200,
+  });
 
   // 在 container 上监听消息（官方示例写法）
   container.on('message', (context: any) => {
