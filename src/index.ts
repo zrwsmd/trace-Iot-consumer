@@ -3,11 +3,14 @@ process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 
 import { logger }         from './logger';
 import { startConsumer }  from './consumer';
+import { startWebServer } from './server';
 
 logger.info('============================================');
-logger.info('  Trace Consumer 启动（数据直接打印模式）');
+logger.info('  Trace Consumer 启动（可视化仪表盘模式）');
 logger.info('============================================');
 
+// 先启动 Web 服务器，再连接 AMQP
+startWebServer();
 startConsumer();
 
 process.on('SIGINT',  () => { logger.info('收到 SIGINT，退出');  process.exit(0); });

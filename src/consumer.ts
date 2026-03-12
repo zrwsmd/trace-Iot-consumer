@@ -2,16 +2,10 @@ import { config } from './config';
 import { logger } from './logger';
 import { buildAuth } from './auth';
 import { parseMessage } from './parser';
-import { printBatchSummary, printStats } from './printHelper';
-import type { TraceBatch } from './types';
+import { pushBatch } from './dataStore';
 
 // rhea 是 CommonJS 模块，require 返回的就是 container 对象
 const container = require('rhea');
-
-// 累计统计
-let totalFrames  = 0;
-let totalBatches = 0;
-let latestBatch: TraceBatch | null = null;
 
 export function startConsumer(): void {
   const auth = buildAuth();
@@ -60,17 +54,8 @@ export function startConsumer(): void {
       return;
     }
 
-    totalBatches++;
-    totalFrames += batch.frames.length;
-    latestBatch  = batch;
-
-    // 每包都打印摘要 + 前3帧预览
-    printBatchSummary(batch);
-
-    // 每累计 printInterval 帧打印一次统计
-    if (totalFrames % config.printInterval < batch.frames.length) {
-      printStats(totalFrames, totalBatches, batch);
-    }
+    // 推送到内存存储 + WebSocket 广播（替代控制台打印）
+    pushBatch(batch);
 
     // 发送 ACK
     context.delivery.accept();
