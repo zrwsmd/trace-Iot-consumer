@@ -651,8 +651,13 @@
       chartBuffer = [];
     }
 
-    // ============= Table Rendering (rAF batched) =============
+    // ============= Table Rendering (优化版) =============
     let rafPending = false;
+
+    // 预创建行模板，避免重复innerHTML
+    const rowTemplate = document.createElement('tr');
+    rowTemplate.className = 'flash';
+    rowTemplate.innerHTML = `<td></td><td></td><td></td><td></td><td></td><td></td><td></td>`;
 
     function scheduleTableRender() {
       if (rafPending || paused) return;
@@ -667,16 +672,19 @@
       const batch = pendingRows.splice(0, TABLE_BATCH_SIZE);
       const fragment = document.createDocumentFragment();
 
+      // 批量克隆模板并填充数据
       for (const row of batch) {
-        const tr = document.createElement('tr');
-        tr.className = 'flash';
-        tr.innerHTML = `<td>${row._idx}</td>`
-          + `<td>${fmt(row.ts)}</td>`
-          + `<td>${fmt(row.axis1_position)}</td>`
-          + `<td>${fmt(row.axis1_velocity)}</td>`
-          + `<td>${fmt(row.axis1_torque)}</td>`
-          + `<td>${fmt(row.motor_rpm)}</td>`
-          + `<td>${fmt(row.pressure_bar)}</td>`;
+        const tr = rowTemplate.cloneNode(true);
+        const cells = tr.cells;
+        
+        cells[0].textContent = String(row._idx);
+        cells[1].textContent = fmt(row.ts);
+        cells[2].textContent = fmt(row.axis1_position);
+        cells[3].textContent = fmt(row.axis1_velocity);
+        cells[4].textContent = fmt(row.axis1_torque);
+        cells[5].textContent = fmt(row.motor_rpm);
+        cells[6].textContent = fmt(row.pressure_bar);
+        
         fragment.appendChild(tr);
       }
 

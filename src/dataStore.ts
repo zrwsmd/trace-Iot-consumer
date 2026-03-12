@@ -1,9 +1,57 @@
 import type { TraceBatch, TraceFrame } from './types';
 
 /**
- * 内存数据存储 — 环形缓冲区
- * 始终只保留最近 MAX_FRAMES 条数据，防止内存爆炸
+ * 高性能环形缓冲区 — 零GC内存管理
+ * 避免频繁slice操作造成的内存压力
  */
+class CircularBuffer<T> {
+  private buffer: T[];
+  private start = 0;
+  private size = 0;
+
+  constructor(private capacity: number) {
+    this.buffer = new Array(capacity);
+  }
+
+  push(item: T): void {
+    this.buffer[this.start] = item;
+    this.start = (this.start + 1) % this.capacity;
+    if (this.size < this.capacity) this.size++;
+  }
+
+  getAll(): T[] {
+    if (this.size === 0) return [];
+    
+    const result: T[] = [];
+    for (let i = 0; i < this.size; i++) {
+      const idx = (this.start + this.capacity - this.size + i) % this.capacity;
+      result.push(this.buffer[idx]);
+    }
+    return result;
+  }
+
+  getLast(n: number): T[] {
+    if (n <= 0 || this.size === 0) return [];
+    const take = Math.min(n, this.size);
+    const result: T[] = [];
+    
+    for (let i = 0; i < take; i++) {
+      const idx = (this.start + this.capacity - take + i) % this.capacity;
+      result.push(this.buffer[idx]);
+    }
+    return result;
+  }
+
+  get length(): number {
+    return this.size;
+  }
+
+  clear(): void {
+    this.start = 0;
+    this.size = 0;
+  }
+}
+
 const MAX_FRAMES = 50_000;          // 最多保留5万条
 
 interface StoredFrame {
@@ -13,7 +61,7 @@ interface StoredFrame {
   [key: string]: string | number | undefined;
 }
 
-let frames: StoredFrame[] = [];
+const frames = new CircularBuffer<StoredFrame>(MAX_FRAMES);
 let totalReceived = 0;              // 累计收到的总帧数
 let batchCount   = 0;               // 累计批次数
 let startTime    = Date.now();
@@ -38,11 +86,8 @@ export function pushBatch(batch: TraceBatch): void {
     _taskId: batch.taskId,
   }));
 
-  frames.push(...stored);
-
-  // 超限时裁剪旧数据
-  if (frames.length > MAX_FRAMES) {
-    frames = frames.slice(frames.length - MAX_FRAMES);
+  for (const frame of stored) {
+    frames.push(frame);
   }
 
   // 广播增量给前端
@@ -72,14 +117,14 @@ export function getStats() {
 
 /** 获取最新 N 条数据（用于首次连接时同步） */
 export function getRecentFrames(n = 500): StoredFrame[] {
-  return frames.slice(-n);
+  return frames.getLast(n);
 }
 
 /** 获取所有列名（动态检测） */
 export function getColumns(): string[] {
   const colSet = new Set<string>();
   // 只扫描最近 200 条即可得到列名
-  const sample = frames.slice(-200);
+  const sample = frames.getLast(200);
   for (const f of sample) {
     for (const k of Object.keys(f)) {
       if (!k.startsWith('_')) colSet.add(k);
