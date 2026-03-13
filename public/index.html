@@ -356,7 +356,7 @@
       <div class="stat-card">
         <div class="stat-label">内存缓存</div>
         <div class="stat-value" id="statMemory">0</div>
-        <div class="stat-sub" id="statMemMax">上限 50,000</div>
+        <div class="stat-sub" id="statMemMax">帧</div>
       </div>
       <div class="stat-card">
         <div class="stat-label">运行时间</div>
@@ -517,7 +517,7 @@
       elStatTotal.textContent = stats.totalReceived.toLocaleString();
       elStatBatches.textContent = stats.batchCount.toLocaleString();
       elStatMemory.textContent = stats.inMemory.toLocaleString();
-      elStatMemMax.textContent = `上限 ${stats.maxFrames.toLocaleString()}`;
+      elStatMemMax.textContent = '帧';
 
       const uptime = stats.uptimeSec;
       const h = Math.floor(uptime / 3600);
