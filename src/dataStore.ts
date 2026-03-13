@@ -2,7 +2,6 @@ import type { TraceBatch, TraceFrame } from './types';
 
 /**
  * 高性能环形缓冲区 — 零GC内存管理
- * 避免频繁slice操作造成的内存压力
  */
 class CircularBuffer<T> {
   private buffer: T[];
@@ -19,22 +18,10 @@ class CircularBuffer<T> {
     if (this.size < this.capacity) this.size++;
   }
 
-  getAll(): T[] {
-    if (this.size === 0) return [];
-    
-    const result: T[] = [];
-    for (let i = 0; i < this.size; i++) {
-      const idx = (this.start + this.capacity - this.size + i) % this.capacity;
-      result.push(this.buffer[idx]);
-    }
-    return result;
-  }
-
   getLast(n: number): T[] {
     if (n <= 0 || this.size === 0) return [];
     const take = Math.min(n, this.size);
     const result: T[] = [];
-    
     for (let i = 0; i < take; i++) {
       const idx = (this.start + this.capacity - take + i) % this.capacity;
       result.push(this.buffer[idx]);
@@ -52,55 +39,71 @@ class CircularBuffer<T> {
   }
 }
 
-const MAX_FRAMES = 50_000;          // 最多保留5万条
+const MAX_FRAMES = 50_000;
 
 interface StoredFrame {
-  _batch: number;   // 来自第几批
-  _device: string;  // 设备名
-  _taskId: string;  // 任务ID
+  _batch: number;
+  _device: string;
+  _taskId: string;
   [key: string]: string | number | undefined;
 }
 
 const frames = new CircularBuffer<StoredFrame>(MAX_FRAMES);
-let totalReceived = 0;              // 累计收到的总帧数
-let batchCount   = 0;               // 累计批次数
+let totalReceived = 0;
+let batchCount   = 0;
 let startTime    = Date.now();
 
-// WebSocket 广播回调
+// ============= 聚合广播机制 =============
+// 核心优化：缓冲多个AMQP批次，定时合并为一次WebSocket消息
+const BROADCAST_INTERVAL = 200;       // 每200ms广播一次（而不是每条消息都广播）
+let pendingFrames: TraceFrame[] = [];  // 待广播的帧缓冲区
+let lastDevice = 'unknown';
+let broadcastTimer: NodeJS.Timeout | null = null;
+
 type BroadcastFn = (event: string, data: unknown) => void;
 let broadcastFn: BroadcastFn | null = null;
 
 export function setBroadcast(fn: BroadcastFn): void {
   broadcastFn = fn;
+  // 启动定时广播
+  if (!broadcastTimer) {
+    broadcastTimer = setInterval(flushBroadcast, BROADCAST_INTERVAL);
+  }
+}
+
+/** 定时刷新：将缓冲的帧合并为一次WebSocket消息 */
+function flushBroadcast(): void {
+  if (!broadcastFn || pendingFrames.length === 0) return;
+
+  const framesToSend = pendingFrames;
+  pendingFrames = [];
+
+  broadcastFn('batch', {
+    device:   lastDevice,
+    count:    framesToSend.length,
+    frames:   framesToSend,
+    stats:    getStats(),
+  });
 }
 
 /** 新批次数据到达 */
 export function pushBatch(batch: TraceBatch): void {
   batchCount++;
   totalReceived += batch.frames.length;
+  lastDevice = batch.deviceName;
 
-  const stored: StoredFrame[] = batch.frames.map(f => ({
-    ...f,
-    _batch:  batchCount,
-    _device: batch.deviceName,
-    _taskId: batch.taskId,
-  }));
-
-  for (const frame of stored) {
-    frames.push(frame);
+  for (const f of batch.frames) {
+    frames.push({
+      ...f,
+      _batch:  batchCount,
+      _device: batch.deviceName,
+      _taskId: batch.taskId,
+    });
   }
 
-  // 广播增量给前端
-  if (broadcastFn) {
-    broadcastFn('batch', {
-      batchNo:  batchCount,
-      taskId:   batch.taskId,
-      device:   batch.deviceName,
-      seq:      batch.seq,
-      count:    batch.frames.length,
-      frames:   batch.frames,          // 只发增量
-      stats:    getStats(),
-    });
+  // 只缓冲，不立即广播
+  for (const f of batch.frames) {
+    pendingFrames.push(f);
   }
 }
 
@@ -123,14 +126,12 @@ export function getRecentFrames(n = 500): StoredFrame[] {
 /** 获取所有列名（动态检测） */
 export function getColumns(): string[] {
   const colSet = new Set<string>();
-  // 只扫描最近 200 条即可得到列名
   const sample = frames.getLast(200);
   for (const f of sample) {
     for (const k of Object.keys(f)) {
       if (!k.startsWith('_')) colSet.add(k);
     }
   }
-  // 固定顺序
   const fixed = ['ts', 'axis1_position', 'axis1_velocity', 'axis1_torque', 'motor_rpm', 'pressure_bar'];
   const result = fixed.filter(c => colSet.has(c));
   colSet.forEach(c => { if (!fixed.includes(c)) result.push(c); });
