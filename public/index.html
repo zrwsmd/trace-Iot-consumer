@@ -7,8 +7,7 @@
   <meta name="description" content="IoT Trace 数据实时可视化仪表盘">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
-  <style>
+    <style>
     /* ============= CSS Reset & Variables ============= */
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -175,42 +174,7 @@
     .stat-card:nth-child(3) .stat-value { color: var(--accent-amber); }
     .stat-card:nth-child(4) .stat-value { color: var(--accent-purple); }
 
-    /* ============= Charts Section ============= */
-    .charts-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 1rem;
-      margin-bottom: 1.5rem;
-    }
-    .chart-card {
-      background: var(--bg-card);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 1.2rem;
-      transition: border-color 0.3s;
-    }
-    .chart-card:hover {
-      border-color: var(--border-glow);
-    }
-    .chart-title {
-      font-size: 0.85rem;
-      font-weight: 600;
-      color: var(--text-secondary);
-      margin-bottom: 0.8rem;
-      display: flex; align-items: center; gap: 6px;
-    }
-    .chart-title::before {
-      content: '';
-      width: 8px; height: 8px;
-      border-radius: 50%;
-    }
-    .chart-card:nth-child(1) .chart-title::before { background: var(--accent-blue); }
-    .chart-card:nth-child(2) .chart-title::before { background: var(--accent-emerald); }
-    .chart-wrap {
-      height: 220px;
-      position: relative;
-    }
-
+    
     /* ============= Data Table ============= */
     .table-section {
       background: var(--bg-card);
@@ -412,22 +376,7 @@
       </div>
     </div>
 
-    <!-- Charts -->
-    <div class="charts-grid">
-      <div class="chart-card">
-        <div class="chart-title">位置 & 速度曲线</div>
-        <div class="chart-wrap">
-          <canvas id="chartPosVel"></canvas>
-        </div>
-      </div>
-      <div class="chart-card">
-        <div class="chart-title">扭矩 & 转速 & 压力</div>
-        <div class="chart-wrap">
-          <canvas id="chartTorqueRpm"></canvas>
-        </div>
-      </div>
-    </div>
-
+    
     <!-- Data Table -->
     <div class="table-section">
       <div class="table-header">
@@ -502,113 +451,6 @@
     const emptyState   = document.getElementById('emptyState');
     const connStatus   = document.getElementById('connStatus');
 
-    // ============= Charts Setup =============
-    const chartColors = {
-      blue:    { border: '#3b82f6', bg: 'rgba(59,130,246,0.08)' },
-      cyan:    { border: '#06b6d4', bg: 'rgba(6,182,212,0.08)' },
-      purple:  { border: '#8b5cf6', bg: 'rgba(139,92,246,0.08)' },
-      emerald: { border: '#10b981', bg: 'rgba(16,185,129,0.08)' },
-      amber:   { border: '#f59e0b', bg: 'rgba(245,158,11,0.08)' },
-      rose:    { border: '#f43f5e', bg: 'rgba(244,63,94,0.08)' },
-    };
-
-    const commonOptions = {
-      responsive: true,
-      maintainAspectRatio: false,
-      animation: false,                    // 关闭动画，确保流畅
-      interaction: { mode: 'index', intersect: false },
-      plugins: {
-        legend: {
-          position: 'top',
-          labels: {
-            color: '#94a3b8',
-            font: { family: 'Inter', size: 11 },
-            boxWidth: 10, boxHeight: 10,
-            padding: 12,
-            usePointStyle: true, pointStyle: 'circle',
-          },
-        },
-        tooltip: {
-          backgroundColor: 'rgba(26,31,53,0.95)',
-          titleColor: '#e2e8f0',
-          bodyColor: '#94a3b8',
-          borderColor: 'rgba(99,115,171,0.2)',
-          borderWidth: 1,
-          cornerRadius: 8,
-          padding: 10,
-          titleFont: { family: 'Inter', weight: '600' },
-          bodyFont: { family: 'Inter' },
-        },
-      },
-      scales: {
-        x: {
-          display: true,
-          grid: { color: 'rgba(99,115,171,0.06)' },
-          ticks: { color: '#64748b', font: { size: 10 }, maxTicksLimit: 8 },
-        },
-        y: {
-          grid: { color: 'rgba(99,115,171,0.06)' },
-          ticks: { color: '#64748b', font: { size: 10 } },
-        },
-      },
-      elements: {
-        point: { radius: 0, hoverRadius: 3 },
-        line:  { borderWidth: 1.5, tension: 0.3 },
-      },
-    };
-
-    function makeDataset(label, color) {
-      return {
-        label,
-        data: [],
-        borderColor: color.border,
-        backgroundColor: color.bg,
-        fill: true,
-      };
-    }
-
-    const chartPosVel = new Chart(document.getElementById('chartPosVel'), {
-      type: 'line',
-      data: {
-        labels: [],
-        datasets: [
-          makeDataset('position', chartColors.blue),
-          makeDataset('velocity', chartColors.cyan),
-        ],
-      },
-      options: {
-        ...commonOptions,
-        scales: {
-          ...commonOptions.scales,
-          y: {
-            ...commonOptions.scales.y,
-            position: 'left',
-            title: { display: true, text: 'position', color: '#64748b', font: { size: 10 } },
-          },
-          y1: {
-            ...commonOptions.scales.y,
-            position: 'right',
-            grid: { drawOnChartArea: false },
-            title: { display: true, text: 'velocity', color: '#64748b', font: { size: 10 } },
-          },
-        },
-      },
-    });
-    // velocity 用右轴
-    chartPosVel.data.datasets[1].yAxisID = 'y1';
-
-    const chartTorqueRpm = new Chart(document.getElementById('chartTorqueRpm'), {
-      type: 'line',
-      data: {
-        labels: [],
-        datasets: [
-          makeDataset('torque', chartColors.amber),
-          makeDataset('motor_rpm', chartColors.emerald),
-          makeDataset('pressure', chartColors.rose),
-        ],
-      },
-      options: commonOptions,
-    });
 
     // ============= Performance Monitor =============
     const perfWarning = document.getElementById('perfWarning');
@@ -630,14 +472,14 @@
           if (prevMode !== 'minimal') {
             console.warn(`[性能降级] 进入最小模式，待渲染: ${pendingRows.length}, FPS: ${fps.toFixed(1)}`);
             perfWarning.style.display = 'block';
-            perfWarning.textContent = `⚠️ 最小模式：大量数据流入，已降低渲染频率`;
+            //perfWarning.textContent = `⚠️ 最小模式：大量数据流入，已降低渲染频率`;
           }
         } else if (pendingRows.length > 1000 || fps < 30) {
           performanceMode = 'degraded';
           if (prevMode !== 'degraded' && prevMode !== 'minimal') {
             console.warn(`[性能降级] 进入降级模式，待渲染: ${pendingRows.length}, FPS: ${fps.toFixed(1)}`);
             perfWarning.style.display = 'block';
-            perfWarning.textContent = `⚠️ 降级模式：性能优化中`;
+            //perfWarning.textContent = `⚠️ 降级模式：性能优化中`;
           }
         } else if (pendingRows.length < 500 && fps > 40) {
           performanceMode = 'normal';
@@ -649,70 +491,6 @@
       }
     }
 
-    // ============= Chart Update Buffer =============
-    let chartBuffer = [];                  // 缓冲待加入图表的帧
-    let chartTimer  = null;
-
-    function bufferChartData(frames) {
-      // 性能降级时减少图表更新
-      if (performanceMode === 'minimal') {
-        // 最小模式：只保留每10个点中的一个
-        const sampled = frames.filter((_, i) => i % 10 === 0);
-        chartBuffer.push(...sampled);
-      } else if (performanceMode === 'degraded') {
-        // 降级模式：只保留每3个点中的一个
-        const sampled = frames.filter((_, i) => i % 3 === 0);
-        chartBuffer.push(...sampled);
-      } else {
-        chartBuffer.push(...frames);
-      }
-      
-      if (!chartTimer) {
-        chartTimer = setTimeout(flushChartData, CHART_UPDATE_MS);
-      }
-    }
-
-    function flushChartData() {
-      chartTimer = null;
-      if (chartBuffer.length === 0) return;
-
-      // 采样：如果缓冲太多，均匀采样到 CHART_MAX_POINTS
-      let sampled = chartBuffer;
-      if (chartBuffer.length > CHART_MAX_POINTS) {
-        const step = Math.ceil(chartBuffer.length / CHART_MAX_POINTS);
-        sampled = chartBuffer.filter((_, i) => i % step === 0);
-      }
-
-      const c1 = chartPosVel.data;
-      const c2 = chartTorqueRpm.data;
-
-      for (const f of sampled) {
-        const label = String(f.ts ?? '');
-        c1.labels.push(label);
-        c1.datasets[0].data.push(f.axis1_position ?? null);
-        c1.datasets[1].data.push(f.axis1_velocity ?? null);
-
-        c2.labels.push(label);
-        c2.datasets[0].data.push(f.axis1_torque ?? null);
-        c2.datasets[1].data.push(f.motor_rpm ?? null);
-        c2.datasets[2].data.push(f.pressure_bar ?? null);
-      }
-
-      // 保持点数上限
-      while (c1.labels.length > CHART_MAX_POINTS) {
-        c1.labels.shift();
-        c1.datasets.forEach(d => d.data.shift());
-      }
-      while (c2.labels.length > CHART_MAX_POINTS) {
-        c2.labels.shift();
-        c2.datasets.forEach(d => d.data.shift());
-      }
-
-      chartPosVel.update('none');
-      chartTorqueRpm.update('none');
-
-      chartBuffer = [];
-    }
 
     // ============= Table Rendering (优化版) =============
     let rafPending = false;
@@ -873,7 +651,6 @@
             pendingRows.push(f);
           }
           scheduleTableRender();
-          bufferChartData(recent);
           if (recent.length > 0) {
             lastDevice = recent[recent.length - 1]._device || '-';
             document.getElementById('statDevice').textContent = `设备: ${lastDevice}`;
@@ -915,7 +692,6 @@
           }
 
           scheduleTableRender();
-          bufferChartData(frames);
         }
       };
     }
