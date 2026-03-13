@@ -467,16 +467,28 @@
 
   <!-- Connection Status -->
   <div class="conn-status connecting" id="connStatus">● 连接中...</div>
+  
+  <!-- Performance Warning -->
+  <div id="perfWarning" style="display:none; position:fixed; top:80px; right:20px; padding:12px 20px; background:rgba(245,158,11,0.15); border:1px solid rgba(245,158,11,0.4); border-radius:8px; color:#f59e0b; font-size:0.85rem; z-index:200; backdrop-filter:blur(10px);">
+    ⚠️ 性能降级模式已启用
+  </div>
 
   <script>
     // ============= State =============
-    const CHART_MAX_POINTS = 300;         // 图表最多显示300个点
-    const TABLE_MAX_ROWS   = 2000;        // 表格最多保留2000行DOM节点
-    const CHART_UPDATE_MS  = 200;         // 图表刷新间隔(ms)
-    const TABLE_BATCH_SIZE = 50;          // 每次rAF最多渲染50行
+    const CHART_MAX_POINTS = 200;         // 图表最多显示200个点（降低渲染压力）
+    const TABLE_MAX_ROWS   = 1000;        // 表格最多保留1000行DOM节点（降低内存）
+    const CHART_UPDATE_MS  = 500;         // 图表刷新间隔(ms)（降低更新频率）
+    const TABLE_BATCH_SIZE = 20;          // 每次rAF最多渲染20行（减少单次渲染量）
+    const MAX_PENDING_ROWS = 5000;        // 待渲染队列上限，超过则丢弃旧数据
+    
+    // 性能监控
+    let renderCount = 0;
+    let lastPerfCheck = Date.now();
+    let performanceMode = 'normal'; // normal, degraded, minimal
 
     let allRows      = [];                // 内存里的原始帧数据
     let pendingRows  = [];                // 待渲染队列
+    let droppedRows  = 0;                 // 丢弃的行数统计
     let autoScroll   = true;
     let paused       = false;
     let lastDevice   = '-';
@@ -598,12 +610,63 @@
       options: commonOptions,
     });
 
+    // ============= Performance Monitor =============
+    const perfWarning = document.getElementById('perfWarning');
+    
+    function checkPerformance() {
+      const now = Date.now();
+      const elapsed = now - lastPerfCheck;
+      
+      if (elapsed > 1000) {
+        const fps = (renderCount / elapsed) * 1000;
+        lastPerfCheck = now;
+        renderCount = 0;
+        
+        const prevMode = performanceMode;
+        
+        // 根据性能动态调整模式
+        if (pendingRows.length > 3000 || fps < 10) {
+          performanceMode = 'minimal';
+          if (prevMode !== 'minimal') {
+            console.warn(`[性能降级] 进入最小模式，待渲染: ${pendingRows.length}, FPS: ${fps.toFixed(1)}`);
+            perfWarning.style.display = 'block';
+            perfWarning.textContent = `⚠️ 最小模式：大量数据流入，已降低渲染频率`;
+          }
+        } else if (pendingRows.length > 1000 || fps < 30) {
+          performanceMode = 'degraded';
+          if (prevMode !== 'degraded' && prevMode !== 'minimal') {
+            console.warn(`[性能降级] 进入降级模式，待渲染: ${pendingRows.length}, FPS: ${fps.toFixed(1)}`);
+            perfWarning.style.display = 'block';
+            perfWarning.textContent = `⚠️ 降级模式：性能优化中`;
+          }
+        } else if (pendingRows.length < 500 && fps > 40) {
+          performanceMode = 'normal';
+          if (prevMode !== 'normal') {
+            console.log(`[性能恢复] 返回正常模式`);
+            perfWarning.style.display = 'none';
+          }
+        }
+      }
+    }
+
     // ============= Chart Update Buffer =============
     let chartBuffer = [];                  // 缓冲待加入图表的帧
     let chartTimer  = null;
 
     function bufferChartData(frames) {
-      chartBuffer.push(...frames);
+      // 性能降级时减少图表更新
+      if (performanceMode === 'minimal') {
+        // 最小模式：只保留每10个点中的一个
+        const sampled = frames.filter((_, i) => i % 10 === 0);
+        chartBuffer.push(...sampled);
+      } else if (performanceMode === 'degraded') {
+        // 降级模式：只保留每3个点中的一个
+        const sampled = frames.filter((_, i) => i % 3 === 0);
+        chartBuffer.push(...sampled);
+      } else {
+        chartBuffer.push(...frames);
+      }
+      
       if (!chartTimer) {
         chartTimer = setTimeout(flushChartData, CHART_UPDATE_MS);
       }
@@ -661,6 +724,15 @@
 
     function scheduleTableRender() {
       if (rafPending || paused) return;
+      
+      // 性能保护：待渲染队列过长时丢弃旧数据
+      if (pendingRows.length > MAX_PENDING_ROWS) {
+        const dropped = pendingRows.length - MAX_PENDING_ROWS;
+        pendingRows = pendingRows.slice(-MAX_PENDING_ROWS);
+        droppedRows += dropped;
+        console.warn(`[性能保护] 丢弃 ${dropped} 行旧数据，累计丢弃: ${droppedRows}`);
+      }
+      
       rafPending = true;
       requestAnimationFrame(renderTableBatch);
     }
@@ -668,8 +740,19 @@
     function renderTableBatch() {
       rafPending = false;
       if (pendingRows.length === 0) return;
+      
+      renderCount++;
+      checkPerformance();
+      
+      // 根据性能模式调整批处理大小
+      let batchSize = TABLE_BATCH_SIZE;
+      if (performanceMode === 'minimal') {
+        batchSize = 5;  // 最小模式：每次只渲染5行
+      } else if (performanceMode === 'degraded') {
+        batchSize = 10; // 降级模式：每次渲染10行
+      }
 
-      const batch = pendingRows.splice(0, TABLE_BATCH_SIZE);
+      const batch = pendingRows.splice(0, batchSize);
       const fragment = document.createDocumentFragment();
 
       // 批量克隆模板并填充数据
@@ -699,7 +782,10 @@
         tableViewport.scrollTop = tableViewport.scrollHeight;
       }
 
-      document.getElementById('tableInfo').textContent = `${allRows.length} 行`;
+      const infoText = `${allRows.length} 行`;
+      const perfInfo = performanceMode !== 'normal' ? ` [${performanceMode}模式]` : '';
+      const dropInfo = droppedRows > 0 ? ` (丢弃${droppedRows})` : '';
+      document.getElementById('tableInfo').textContent = infoText + perfInfo + dropInfo;
 
       // 如果还有待渲染的行，继续
       if (pendingRows.length > 0) {
@@ -808,12 +894,24 @@
             idx++;
             f._idx = idx;
             allRows.push(f);
-            pendingRows.push(f);
+            
+            // 性能降级时减少表格渲染
+            if (performanceMode === 'minimal') {
+              // 最小模式：只渲染每20个中的一个
+              if (idx % 20 === 0) pendingRows.push(f);
+            } else if (performanceMode === 'degraded') {
+              // 降级模式：只渲染每5个中的一个
+              if (idx % 5 === 0) pendingRows.push(f);
+            } else {
+              pendingRows.push(f);
+            }
           }
 
-          // 内存限制
-          if (allRows.length > 100000) {
-            allRows = allRows.slice(-50000);
+          // 内存限制（更严格）
+          if (allRows.length > 30000) {
+            const removed = allRows.length - 20000;
+            allRows = allRows.slice(-20000);
+            console.log(`[内存管理] 移除 ${removed} 条旧数据，当前: ${allRows.length}`);
           }
 
           scheduleTableRender();

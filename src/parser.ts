@@ -71,7 +71,11 @@ export function parseMessage(rawMsg: unknown): TraceBatch | null {
 
     // 验证必需字段
     if (!data.frames || !Array.isArray(data.frames)) {
-      logger.error(`payload 缺少 frames 字段，收到的字段: ${Object.keys(data).join(', ')}`);
+      logger.error(`[解析错误] payload 缺少 frames 字段`);
+      logger.error(`  收到的字段: ${Object.keys(data).join(', ')}`);
+      logger.error(`  设备名: ${envelope.deviceName ?? 'unknown'}`);
+      logger.error(`  完整envelope: ${JSON.stringify(envelope, null, 2)}`);
+      logger.error(`  完整data: ${JSON.stringify(data, null, 2)}`);
       return null;
     }
 
@@ -83,8 +87,14 @@ export function parseMessage(rawMsg: unknown): TraceBatch | null {
       frames:     data.frames,
     };
   } catch (e) {
-    logger.error(`消息解析失败: ${(e as Error).message}`);
-    logger.debug(`原始消息: ${JSON.stringify(rawMsg).slice(0, 200)}...`);
+    logger.error(`[解析异常] 消息解析失败: ${(e as Error).message}`);
+    logger.error(`  错误堆栈: ${(e as Error).stack}`);
+    try {
+      const msgStr = JSON.stringify(rawMsg, null, 2);
+      logger.error(`  完整原始消息: ${msgStr}`);
+    } catch {
+      logger.error(`  原始消息无法序列化，类型: ${typeof rawMsg}`);
+    }
     return null;
   }
 }
