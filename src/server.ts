@@ -3,7 +3,7 @@ import path from 'path';
 import { createServer } from 'http';
 import { WebSocketServer, WebSocket } from 'ws';
 import { logger } from './logger';
-import { setBroadcast, getStats, getRecentFrames, getColumns } from './dataStore';
+import { setBroadcast, getStats, getRecentFrames, getColumns, getAllFrames } from './dataStore';
 
 const PORT = 4000;
 
@@ -15,6 +15,15 @@ export function startWebServer(): void {
 
   app.get('/api/stats', (_req, res) => {
     res.json(getStats());
+  });
+
+  app.get('/api/history', (_req, res) => {
+    const allFrames = getAllFrames();
+    res.json({
+      total: allFrames.length,
+      frames: allFrames,
+      stats: getStats(),
+    });
   });
 
   // WebSocket — 精简广播，序列化一次发给所有客户端

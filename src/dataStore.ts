@@ -123,6 +123,11 @@ export function getRecentFrames(n = 500): StoredFrame[] {
   return frames.getLast(n);
 }
 
+/** 获取所有历史数据 */
+export function getAllFrames(): StoredFrame[] {
+  return frames.getLast(frames.length);
+}
+
 /** 获取所有列名（动态检测） */
 export function getColumns(): string[] {
   const colSet = new Set<string>();
