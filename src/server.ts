@@ -46,7 +46,7 @@ export function startWebServer(): void {
 
   wss.on('connection', (ws) => {
     clients.add(ws);
-    logger.info(`WebSocket 客户端连接，当前: ${clients.size}`);
+    logger.info(`WebSocket 客户端连接，当前连接数: ${clients.size}`);
 
     // 发送初始数据（只发给新连接的客户端）
     const initMsg = JSON.stringify({
