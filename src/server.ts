@@ -61,7 +61,7 @@ export function startWebServer(): void {
 
     ws.on('close', () => {
       clients.delete(ws);
-      logger.info(`WebSocket 客户端断开，当前: ${clients.size}`);
+      logger.info(`WebSocket 客户端断开，当前连接数: ${clients.size}`);
     });
 
     ws.on('error', (err) => {
